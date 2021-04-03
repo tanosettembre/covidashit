@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 from flask_babel import gettext
 
 from app.data import get_national_data, get_region_data, get_province_data
-from constants import (
-    REGION_KEY, REGIONS, PROVINCE_KEY, DATE_KEY, VARS, PROVINCES, KEY_PERIODS,
-    TOTAL_CASES_KEY, NEW_POSITIVE_KEY, NEW_POSITIVE_MA_KEY
-)
+from settings.dates import KEY_PERIODS
+from settings import NEW_POSITIVE_KEY, NEW_POSITIVE_MA_KEY, TOTAL_CASES_KEY, \
+    VARS_CONF, REGIONS, PROVINCES
+from settings.vars import REGION_KEY, PROVINCE_KEY, DATE_KEY
 
 plt.rcParams['ytick.labelsize'] = 16
 plt.rcParams['xtick.labelsize'] = 16
@@ -38,7 +38,7 @@ class Plotter(object):
             "provincial": get_province_data
         }
         self.varname = varname
-        self.plot_title = f"{gettext(VARS[self.varname]['title'])}"
+        self.plot_title = f"{gettext(VARS_CONF[self.varname]['title'])}"
         self.area = area
         if self.area:
             filter_key = REGION_KEY if self.area in REGIONS else PROVINCE_KEY
@@ -57,7 +57,7 @@ class Plotter(object):
         ax.get_xaxis().set_major_formatter(mdates.DateFormatter("%b %Y"))
 
         y_annotation = int(self.df[varname].max() * 0.8)
-        if VARS[self.varname]["type"] == "cum":
+        if VARS_CONF[self.varname]["type"] == "cum":
             y_annotation = int(self.df[varname].max() * 0.1)
             plt.yscale('log')
 
@@ -119,7 +119,7 @@ def validate_plot_request(varname, data_type, area):
     """
     error = None
     is_valid = False
-    available_vars = [var for var in VARS if VARS[var]['type'] != 'vax']
+    available_vars = [var for var in VARS_CONF if VARS_CONF[var]['type'] != 'vax']
     if varname is None:
         error = (
             "Specify a varname; "
@@ -130,7 +130,7 @@ def validate_plot_request(varname, data_type, area):
         error = "Accepted 'data_type' ['national', 'regional', 'provincial'] "
     else:
         if data_type == "national":
-            if varname in VARS:
+            if varname in VARS_CONF:
                 if area is None:
                     is_valid = True
                 else:
@@ -146,7 +146,7 @@ def validate_plot_request(varname, data_type, area):
         elif data_type == "regional":
             if not area:
                 error = "an area must be specified; "
-            if area in REGIONS and varname in VARS:
+            if area in REGIONS and varname in VARS_CONF:
                 is_valid = True
             else:
                 error = (

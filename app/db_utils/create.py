@@ -4,23 +4,22 @@ DB Recovery
 import pandas as pd
 from flask import current_app as app
 
-from app.db.etl import (
+from app.db_utils.etl import (
     augment_national_df, augment_regional_df, augment_provincial_df,
     build_national_trends, build_regional_trends, build_provincial_trends,
     build_regional_breakdown, build_provincial_breakdowns,
     build_national_series, build_regional_series, build_provincial_series,
     COLUMNS_TO_DROP, augment_vax_df, augment_summary_vax_df
 )
-from app.db import (
+from app.db_utils import (
     NAT_DATA_COLL, NAT_TRENDS_COLL, NAT_SERIES_COLL, REG_DATA_COLL,
     REG_TRENDS_COLL, REG_SERIES_COLL, REG_BREAKDOWN_COLL, PROV_DATA_COLL,
     PROV_TRENDS_COLL, PROV_SERIES_COLL, PROV_BREAKDOWN_COLL, VAX_COLL,
     VAX_SUMMARY_COLL
 )
-from constants import (
-    URL_NATIONAL, URL_REGIONAL, URL_PROVINCIAL, DATE_KEY, URL_VAX_DATA,
-    URL_VAX_ADMINS_SUMMARY_DATA, VAX_DATE_KEY
-)
+from settings.urls import URL_NATIONAL, URL_REGIONAL, URL_PROVINCIAL, \
+    URL_ADMINS, URL_ADMINS_SUMMARY
+from settings.vars import DATE_KEY, VAX_DATE_KEY
 
 
 def create_national_collection():
@@ -257,7 +256,7 @@ def create_provincial_trends_collection():
 
 def create_vax_collection(summary=False):
     """Create vaccine-data colleciton"""
-    url = URL_VAX_DATA if not summary else URL_VAX_ADMINS_SUMMARY_DATA
+    url = URL_ADMINS if not summary else URL_ADMINS_SUMMARY
     coll = VAX_COLL if not summary else VAX_SUMMARY_COLL
     df = pd.read_csv(url, parse_dates=[VAX_DATE_KEY])
     df = augment_vax_df(df) if not summary else augment_summary_vax_df(df)

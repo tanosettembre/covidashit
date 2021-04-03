@@ -9,30 +9,29 @@ import requests
 from flask import current_app as app
 from flask_babel import gettext
 
-from app.db import (
+from app.db_utils import (
     NAT_DATA_COLL, NAT_TRENDS_COLL, NAT_SERIES_COLL, REG_DATA_COLL,
     REG_TRENDS_COLL, REG_SERIES_COLL, REG_BREAKDOWN_COLL, PROV_DATA_COLL,
     PROV_TRENDS_COLL, PROV_SERIES_COLL, PROV_BREAKDOWN_COLL, VAX_COLL,
     VAX_SUMMARY_COLL
 )
 from app.utils import rubbish_notes, translate_series_lang
-from constants import (
-    REGION_KEY, PROVINCE_KEY, DATE_KEY, NOTE_KEY, DAILY_POSITIVITY_INDEX,
-    UPDATE_FMT, VARS, ITALY_MAP, VERSION, REGIONS, PROVINCES, TOTAL_CASES_KEY,
-    NEW_POSITIVE_KEY, KEY_PERIODS, URL_VAX_LATEST_UPDATE,
-    VAX_LATEST_UPDATE_KEY, VAX_DATE_FMT, VAX_UPDATE_FMT, VAX_AREA_KEY,
-    VAX_AGE_KEY, HEALTHCARE_PERS_KEY, NONHEALTHCARE_PERS_KEY, HFE_GUESTS_KEY,
-    OD_TO_PC_MAP, ITALY_POPULATION, URL_VAX_SUMMARY_DATA, VAX_ADMINS_PERC_KEY,
-    ADMINS_DOSES_KEY, DELIVERED_DOSES_KEY, VAX_DATE_KEY, VAX_TOT_ADMINS_KEY,
-    CHART_DATE_FMT, OVER_80_KEY, POP_KEY, VAX_FIRST_DOSE_KEY,
-    VAX_SECOND_DOSE_KEY, VAX_PROVIDER_KEY,
-    OTHER_KEY, ARMED_FORCES_KEY,
-    SCHOOL_PERS_KEY
-)
+from settings.dates import KEY_PERIODS
+from settings.urls import URL_VAX_LATEST_UPDATE, URL_SUMMARY
+from settings import VERSION, NEW_POSITIVE_KEY, TOTAL_CASES_KEY, \
+    VAX_FIRST_DOSE_KEY, VAX_SECOND_DOSE_KEY, \
+    HEALTHCARE_PERS_KEY, NONHEALTHCARE_PERS_KEY, \
+    HFE_GUESTS_KEY, OVER_80_KEY, OTHER_KEY, ARMED_FORCES_KEY, SCHOOL_PERS_KEY, \
+    VARS_CONF, ITALY_MAP, REGIONS, PROVINCES, ITALY_POPULATION, OD_TO_PC_MAP
+from settings.vars import DAILY_POSITIVITY_INDEX, REGION_KEY, PROVINCE_KEY, \
+    VAX_LATEST_UPDATE_KEY, VAX_DATE_FMT, CHART_DATE_FMT, UPDATE_FMT, \
+    VAX_UPDATE_FMT, DATE_KEY, NOTE_KEY, VAX_DATE_KEY, VAX_AREA_KEY, \
+    VAX_AGE_KEY, POP_KEY, ADMINS_DOSES_KEY, DELIVERED_DOSES_KEY, \
+    VAX_ADMINS_PERC_KEY, VAX_TOT_ADMINS_KEY, VAX_PROVIDER_KEY
 
-DATA_SERIES = [VARS[key]["title"] for key in VARS]
+DATA_SERIES = [VARS_CONF[key]["title"] for key in VARS_CONF]
 DASHBOARD_DATA = {
-    "vars_config": VARS,
+    "vars_config": VARS_CONF,
     "data_series": DATA_SERIES,
     "italy_map": ITALY_MAP,
     "VERSION": VERSION,
@@ -41,12 +40,12 @@ DASHBOARD_DATA = {
     "key_periods": KEY_PERIODS
 }
 
-CUM_QUANTITIES = [qty for qty in VARS if VARS[qty]["type"] == "cum"]
-NON_CUM_QUANTITIES = [qty for qty in VARS if VARS[qty]["type"] == "current"]
-DAILY_QUANTITIES = [qty for qty in VARS if VARS[qty]["type"] == "daily"]
+CUM_QUANTITIES = [qty for qty in VARS_CONF if VARS_CONF[qty]["type"] == "cum"]
+NON_CUM_QUANTITIES = [qty for qty in VARS_CONF if VARS_CONF[qty]["type"] == "current"]
+DAILY_QUANTITIES = [qty for qty in VARS_CONF if VARS_CONF[qty]["type"] == "daily"]
 TREND_CARDS = [
-    qty for qty in VARS
-    if not qty.endswith("_ma") and VARS[qty]["type"] != "vax"
+    qty for qty in VARS_CONF
+    if not qty.endswith("_ma") and VARS_CONF[qty]["type"] != "vax"
 ]
 PROV_TREND_CARDS = [TOTAL_CASES_KEY, NEW_POSITIVE_KEY]
 VAX_PEOPLE_CATEGORIES = [
@@ -101,7 +100,7 @@ def get_national_trends():
     """Return national trends from DB"""
     return sorted(
         list(NAT_TRENDS_COLL.find({})),
-        key=lambda x: list(VARS.keys()).index(x['id'])
+        key=lambda x: list(VARS_CONF.keys()).index(x['id'])
     )
 
 
@@ -271,7 +270,7 @@ def get_perc_pop_vax(population, area=None):
 def enrich_frontend_data(area=None, **data):
     """
     Return a data dict to be rendered which is an augmented copy of
-    DASHBOARD_DATA defined in constants.py
+    DASHBOARD_DATA defined in ddta.py
     :param area: optional, str
     :param data: **kwargs
     :return: dict
@@ -389,7 +388,7 @@ def get_category_chart_data(area=None):
         doc = next(cursor)
         app.logger.debug(f"Category chart data: f{doc}")
         chart_data = [
-            {'name': gettext(VARS[cat]["title"]), 'y': doc[cat]}
+            {'name': gettext(VARS_CONF[cat]["title"]), 'y': doc[cat]}
             for cat in VAX_PEOPLE_CATEGORIES
         ]
     except Exception as e:
@@ -462,7 +461,7 @@ def get_admins_perc(area=None):
     """
     admins_perc = "n/a"
     try:
-        df = pd.read_csv(URL_VAX_SUMMARY_DATA)
+        df = pd.read_csv(URL_SUMMARY)
         if area is None:
             admins_perc = round(
                 (df[ADMINS_DOSES_KEY].sum() /
@@ -590,10 +589,10 @@ def get_vax_trends(area=None):
             'id': d,
             'yesterday_count': "{:,d}".format(yesterday_count),
             'percentage': perc,
-            'title': VARS[d]["title"],
-            "colour": VARS[d][status]["colour"],
-            "icon": VARS[d]["icon"],
-            "status_icon": VARS[d][status]["icon"],
+            'title': VARS_CONF[d]["title"],
+            "colour": VARS_CONF[d][status]["colour"],
+            "icon": VARS_CONF[d]["icon"],
+            "status_icon": VARS_CONF[d][status]["icon"],
             'count': "{:,d}".format(count)
         })
     return trends
