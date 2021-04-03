@@ -25,7 +25,9 @@ from constants import (
     OD_TO_PC_MAP, ITALY_POPULATION, URL_VAX_SUMMARY_DATA, VAX_ADMINS_PERC_KEY,
     ADMINS_DOSES_KEY, DELIVERED_DOSES_KEY, VAX_DATE_KEY, VAX_TOT_ADMINS_KEY,
     CHART_DATE_FMT, OVER_80_KEY, POP_KEY, VAX_FIRST_DOSE_KEY,
-    VAX_SECOND_DOSE_KEY, VAX_PROVIDER_KEY
+    VAX_SECOND_DOSE_KEY, VAX_PROVIDER_KEY,
+    OTHER_KEY, ARMED_FORCES_KEY,
+    SCHOOL_PERS_KEY
 )
 
 DATA_SERIES = [VARS[key]["title"] for key in VARS]
@@ -48,7 +50,9 @@ TREND_CARDS = [
 ]
 PROV_TREND_CARDS = [TOTAL_CASES_KEY, NEW_POSITIVE_KEY]
 VAX_PEOPLE_CATEGORIES = [
-    HEALTHCARE_PERS_KEY, NONHEALTHCARE_PERS_KEY, HFE_GUESTS_KEY, OVER_80_KEY]
+    HEALTHCARE_PERS_KEY, NONHEALTHCARE_PERS_KEY, HFE_GUESTS_KEY, OVER_80_KEY,
+    OTHER_KEY, ARMED_FORCES_KEY, SCHOOL_PERS_KEY
+]
 
 
 def get_query_menu(area=None):
@@ -357,10 +361,12 @@ def get_category_chart_data(area=None):
             '$group': {
                 '_id': f'${VAX_AREA_KEY}',
                 HEALTHCARE_PERS_KEY: {'$sum': f'${HEALTHCARE_PERS_KEY}'},
-                NONHEALTHCARE_PERS_KEY: {
-                    '$sum': f'${NONHEALTHCARE_PERS_KEY}'},
+                NONHEALTHCARE_PERS_KEY: {'$sum': f'${NONHEALTHCARE_PERS_KEY}'},
                 HFE_GUESTS_KEY: {'$sum': f'${HFE_GUESTS_KEY}'},
-                OVER_80_KEY: {'$sum': f'${HFE_GUESTS_KEY}'},
+                OVER_80_KEY: {'$sum': f'${OVER_80_KEY}'},
+                OTHER_KEY: {'$sum': f'${OTHER_KEY}'},
+                ARMED_FORCES_KEY: {'$sum': f'${ARMED_FORCES_KEY}'},
+                SCHOOL_PERS_KEY: {'$sum': f'${SCHOOL_PERS_KEY}'},
             }
         }
         pipe = [match, group]
@@ -369,10 +375,12 @@ def get_category_chart_data(area=None):
             '$group': {
                 '_id': '',
                 HEALTHCARE_PERS_KEY: {'$sum': f'${HEALTHCARE_PERS_KEY}'},
-                NONHEALTHCARE_PERS_KEY: {
-                    '$sum': f'${NONHEALTHCARE_PERS_KEY}'},
+                NONHEALTHCARE_PERS_KEY: {'$sum': f'${NONHEALTHCARE_PERS_KEY}'},
                 HFE_GUESTS_KEY: {'$sum': f'${HFE_GUESTS_KEY}'},
-                OVER_80_KEY: {'$sum': f'${HFE_GUESTS_KEY}'},
+                OVER_80_KEY: {'$sum': f'${OVER_80_KEY}'},
+                OTHER_KEY: {'$sum': f'${OTHER_KEY}'},
+                ARMED_FORCES_KEY: {'$sum': f'${ARMED_FORCES_KEY}'},
+                SCHOOL_PERS_KEY: {'$sum': f'${SCHOOL_PERS_KEY}'},
             }
         }
         pipe = [group]
@@ -519,3 +527,73 @@ def get_admins_per_provider_chart_data(area=None):
     data = list(VAX_COLL.aggregate(pipeline=pipe))
     app.logger.info(f"BLA {data}")
     return [{'name': d['_id'], 'y': d['tot']} for d in data]
+
+
+def get_vax_trends_data(area=None):
+    """
+    Return the first- and second-dose data in the last two days
+    :param area: optional, str
+    :return: list of dicts
+    """
+    if area is None:
+        pipe = [
+            {
+                '$group': {
+                    '_id': f'${VAX_DATE_KEY}',
+                    VAX_FIRST_DOSE_KEY: {'$sum': f'${VAX_FIRST_DOSE_KEY}'},
+                    VAX_SECOND_DOSE_KEY: {'$sum': f'${VAX_SECOND_DOSE_KEY}'}
+                }
+            },
+            {"$sort": {"_id": -1}},
+            {'$limit': 2}
+        ]
+    else:
+        pipe = [
+            {'$match': {VAX_AREA_KEY: area}},
+            {
+                '$group': {
+                    '_id': f'$data_somministrazione',
+                    VAX_FIRST_DOSE_KEY: {'$sum': f'${VAX_FIRST_DOSE_KEY}'},
+                    VAX_SECOND_DOSE_KEY: {'$sum': f'${VAX_SECOND_DOSE_KEY}'}
+                }
+            },
+            {"$sort": {"_id": -1}},
+            {'$limit': 2}
+        ]
+    data = list(VAX_COLL.aggregate(pipeline=pipe))
+    return data
+
+
+def get_vax_trends(area=None):
+    """
+    Return the vax-trends array
+    :param area: optional, str
+    :return: list of dicts
+    """
+    data = get_vax_trends_data(area)
+    trends = []
+    for d in (VAX_FIRST_DOSE_KEY, VAX_SECOND_DOSE_KEY):
+        count = data[0][d]
+        yesterday_count = data[1][d]
+        diff = count - yesterday_count
+        if diff > 0:
+            status = 'increase'
+        elif diff < 0:
+            status = 'decrease'
+        else:
+            status = 'stable'
+        try:
+            perc = '{}%'.format(round(diff / data[1][d] * 100, 1))
+        except ValueError:
+            perc = 'n/a'
+        trends.append({
+            'id': d,
+            'yesterday_count': "{:,d}".format(yesterday_count),
+            'percentage': perc,
+            'title': VARS[d]["title"],
+            "colour": VARS[d][status]["colour"],
+            "icon": VARS[d]["icon"],
+            "status_icon": VARS[d][status]["icon"],
+            'count': "{:,d}".format(count)
+        })
+    return trends
