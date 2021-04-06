@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, render_template, send_from_directory
 from flask_babel import Babel
 from flask_compress import Compress
+from flask_sqlalchemy import SQLAlchemy
 from flask_pymongo import PyMongo
 from flask_sitemap import Sitemap
 
@@ -22,6 +23,7 @@ babel = Babel()
 sitemap = Sitemap()
 compress = Compress()
 celery = Celery(__name__)
+db = SQLAlchemy()
 
 
 @babel.localeselector
@@ -81,6 +83,7 @@ def create_app():
         app.root_path, TRANSLATION_DIRNAME)
     compress.init_app(app)
     mongo.init_app(app)
+    db.init_app(app)
     babel.init_app(app)
     sitemap.init_app(app)
     set_error_handlers(app)
@@ -97,69 +100,19 @@ def create_app():
     app.register_blueprint(api)
 
     from app.db_utils.create import (
-        create_national_collection, create_national_series_collection,
-        create_national_trends_collection, create_regional_collection,
-        create_regional_breakdown_collection,
-        create_regional_series_collection,
-        create_regional_trends_collection, create_provincial_collections,
-        create_provincial_breakdown_collection,
-        create_provincial_series_collection,
-        create_provincial_trends_collection, create_vax_collection
+        create_national_table, create_regional_table,
+        create_national_trends_view, create_provincial_collections,
+        create_admins_table, create_summary_table, create_admins_summary_table
     )
 
     creation_menu = {
-        "national": {
-            'args': None,
-            'func': create_national_collection
-        },
-        "regional": {
-            'args': None,
-            'func': create_regional_collection
-        },
-        "provincial": {
-            'args': None,
-            'func': create_provincial_collections
-        },
-        "national_trends": {
-            'args': None,
-            'func': create_national_trends_collection
-        },
-        "regional_trends": {
-            'args': None,
-            'func': create_regional_trends_collection
-        },
-        "provincial_trends": {
-            'args': None,
-            'func': create_provincial_trends_collection
-        },
-        "regional_breakdown": {
-            'args': None,
-            'func': create_regional_breakdown_collection
-        },
-        "provincial_breakdown": {
-            'args': None,
-            'func': create_provincial_breakdown_collection
-        },
-        "national_series": {
-            'args': None,
-            'func': create_national_series_collection
-        },
-        "regional_series": {
-            'args': None,
-            'func': create_regional_series_collection
-        },
-        "provincial_series": {
-            'args': None,
-            'func': create_provincial_series_collection
-        },
-        "vax": {
-            'args': None,
-            'func': create_vax_collection
-        },
-        "vax_summary": {
-            'args': True,
-            'func': create_vax_collection
-        }
+        "national": create_national_table,
+        "national-trends": create_national_trends_view,
+        "regional": create_regional_table,
+        "provincial": create_provincial_collections,
+        "admins": create_admins_table,
+        "summary": create_summary_table,
+        "admins-summary": create_admins_summary_table
     }
 
     @app.after_request
@@ -174,13 +127,11 @@ def create_app():
         r.headers["Cache-Control"] = "public, max-age=0"
         return r
 
-    @app.cli.command("create-collections")
+    @app.cli.command("create-db")
     def populate_db():
         """Populate all the collections needed on mongoDB"""
         for _type in creation_menu:
-            args = creation_menu[_type]['args']
-            func = creation_menu[_type]['func']
-            func() if not args else func(args)
+            creation_menu[_type]()
 
     @app.cli.command("create")
     @click.argument("collection_type")
@@ -188,14 +139,8 @@ def create_app():
         """
         Populate a collection_type on mongoDB.
         Choose one of the following:
-        "national", "regional", "provincial", "latest_regional",
-        "latest_provincial", "national_trends", "regional_trends",
-        "provincial_trends", "regional_breakdown", "provincial_breakdown",
-        "national_series", "regional_series", "provincial_series",
-        "vax", "vax_summary"
+        "national", "regional", "provincial", "vax", "vax_summary"
         """
-        args = creation_menu[collection_type]['args']
-        func = creation_menu[collection_type]['func']
-        func() if not args else func(args)
+        creation_menu[collection_type]()
 
     return app
